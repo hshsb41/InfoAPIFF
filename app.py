@@ -658,31 +658,6 @@ async def GetAccountInformation(
 
 
 # ============================================================
-# EXTERNAL API
-# ============================================================
-
-async def fetch_external_api(url):
-
-    try:
-
-        async with httpx.AsyncClient(
-            timeout=5.0
-        ) as client:
-
-            response = await client.get(
-                url
-            )
-
-            if response.status_code == 200:
-                return response.json()
-
-    except Exception:
-        pass
-
-    return None
-
-
-# ============================================================
 # DATE FORMAT
 # ============================================================
 
@@ -719,27 +694,15 @@ def ts_to_bst(ts):
 @app.route("/info")
 def get_full_info():
 
-    uid = request.args.get(
-        "uid"
-    )
+    uid = request.args.get("uid")
 
     if not uid:
-
-        return jsonify({
-            "error":
-                "UID required"
-        }), 400
+        return jsonify({"error": "UID required"}), 400
 
     try:
-
         uid_int = int(uid)
-
     except Exception:
-
-        return jsonify({
-            "error":
-                "Invalid UID"
-        }), 400
+        return jsonify({"error": "Invalid UID"}), 400
 
 
     # --------------------------------------------------------
@@ -803,41 +766,16 @@ def get_full_info():
 
     try:
 
-        asyncio.set_event_loop(
-            loop
+        asyncio.set_event_loop(loop)
+
+        player_data = loop.run_until_complete(
+            try_all_regions()
         )
-
-        account_data = (
-            loop.run_until_complete(
-                asyncio.gather(
-                    try_all_regions(),
-
-                    fetch_external_api(
-                        "https://api-free-fire-dou-info-by-ckrpro.vercel.app/"
-                        f"api/duo?uid={uid}"
-                    ),
-
-                    fetch_external_api(
-                        "https://amin-team-api.vercel.app/"
-                        f"check_banned?player_id={uid}"
-                    )
-                )
-            )
-        )
-
-        player_data = account_data[0]
-        duo_data = account_data[1]
-        ban_data = account_data[2]
 
     except Exception as e:
 
-        print(
-            f"❌ Global error: {e}"
-        )
-
+        print(f"❌ Global error: {e}")
         player_data = None
-        duo_data = None
-        ban_data = None
 
     finally:
 
@@ -849,265 +787,33 @@ def get_full_info():
     # --------------------------------------------------------
 
     if not player_data:
-
-        return jsonify({
-            "error":
-                "Player not found"
-        }), 404
+        return jsonify({"error": "Player not found"}), 404
 
 
     # ========================================================
-    # ORIGINAL DATA
+    # EXTRACT DATA
     # ========================================================
 
-    used_region = player_data.get(
-        "region",
-        "Unknown"
-    )
-
-    basic = player_data.get(
-        "basicInfo",
-        {}
-    ) or {}
-
-    clan = player_data.get(
-        "clanBasicInfo",
-        {}
-    ) or {}
-
-    social = player_data.get(
-        "socialInfo",
-        {}
-    ) or {}
-
-    credit = player_data.get(
-        "creditScoreInfo",
-        {}
-    ) or {}
-
-    captain = player_data.get(
-        "captainBasicInfo",
-        {}
-    ) or {}
+    basic = player_data.get("basicInfo", {}) or {}
+    social = player_data.get("socialInfo", {}) or {}
+    credit = player_data.get("creditScoreInfo", {}) or {}
 
 
     # ========================================================
-    # BAN
-    # ========================================================
-
-    ban_status = "UNKNOWN"
-
-    if isinstance(
-        ban_data,
-        dict
-    ):
-
-        ban_status = ban_data.get(
-            "status",
-            "UNKNOWN"
-        )
-
-
-    # ========================================================
-    # DUO
-    # ========================================================
-
-    formatted_duo = (
-        "Duo not found"
-    )
-
-    if isinstance(
-        duo_data,
-        dict
-    ):
-
-        inner_data = duo_data.get(
-            "data"
-        )
-
-        if (
-            isinstance(
-                inner_data,
-                dict
-            )
-            and inner_data.get(
-                "partner_uid"
-            )
-        ):
-
-            formatted_duo = inner_data
-
-
-    # ========================================================
-    # FINAL RESPONSE
+    # FINAL RESPONSE FORMAT
     # ========================================================
 
     response = {
-
-        "status":
-            "success",
-
-        "server_used":
-            used_region,
-
-        "BanStatus":
-            ban_status,
-
-
-        # ====================================================
-        # BASIC INFORMATION
-        # ====================================================
-
-        "BasicInformation": {
-
-            "Name":
-                basic.get(
-                    "nickname",
-                    "N/A"
-                ),
-
-            "UID":
-                uid,
-
-            "Region":
-                basic.get(
-                    "region",
-                    used_region
-                ),
-
-            "Bio":
-                social.get(
-                    "signature",
-                    "N/A"
-                ),
-
-            "HonorScore":
-                credit.get(
-                    "creditScore",
-                    "N/A"
-                ),
-
-            "Level":
-                basic.get(
-                    "level",
-                    "N/A"
-                ),
-
-            "Exp":
-                basic.get(
-                    "exp",
-                    "N/A"
-                ),
-
-            "Likes":
-                basic.get(
-                    "liked",
-                    "N/A"
-                ),
-
-            "CreateDate":
-                ts_to_bst(
-                    basic.get(
-                        "createAt",
-                        0
-                    )
-                ),
-
-            "LastLoginDate":
-                ts_to_bst(
-                    basic.get(
-                        "lastLoginAt",
-                        0
-                    )
-                )
-        },
-
-
-        # ====================================================
-        # GUILD
-        # ====================================================
-
-        "GuildInformation": {
-
-            "GuildName":
-                clan.get(
-                    "clanName",
-                    "No Guild"
-                ),
-
-            "GuildID":
-                clan.get(
-                    "clanId",
-                    "N/A"
-                ),
-
-            "GuildLevel":
-                clan.get(
-                    "clanLevel",
-                    "N/A"
-                ),
-
-            "LiveMembers":
-                clan.get(
-                    "memberNum",
-                    "N/A"
-                ),
-
-            "MaxMembers":
-                clan.get(
-                    "capacity",
-                    "N/A"
-                ),
-
-            "LeaderName":
-                captain.get(
-                    "nickname",
-                    "N/A"
-                ),
-
-            "LeaderUID":
-                captain.get(
-                    "accountId",
-                    "N/A"
-                ),
-
-            "LeaderLevel":
-                captain.get(
-                    "level",
-                    "N/A"
-                )
-        },
-
-
-        # ====================================================
-        # DUO
-        # ====================================================
-
-        "DuoInformation":
-            formatted_duo,
-
-
-        # ====================================================
-        # DEVELOPER
-        # ====================================================
-
-        "DeveloperInfo": {
-
-            "Dev":
-                "ckrpro",
-
-            "TikTok":
-                "ckr unknown",
-
-            "YouTube":
-                "ckr unknown"
-        }
+        "Name": basic.get("nickname", "N/A"),
+        "Level": basic.get("level", "N/A"),
+        "Exp": basic.get("exp", "N/A"),
+        "Honor Score": credit.get("creditScore", "N/A"),
+        "Created": ts_to_bst(basic.get("createAt", 0)),
+        "Last Login": ts_to_bst(basic.get("lastLoginAt", 0)),
+        "Bio": social.get("signature", "N/A")
     }
 
-
-    return jsonify(
-        response
-    )
+    return jsonify(response)
 
 
 # ============================================================
@@ -1118,33 +824,15 @@ def get_full_info():
 def home():
 
     return jsonify({
-
-        "status":
-            "running",
-
-        "name":
-            "CKRPRO FF",
-
-        "version":
-            "OB55",
-
-        "endpoint":
-            "/info?uid=UID",
-
-        "example":
-            "/info?uid=2084018498",
-
-        "priority":
-            "BD → IND → BR",
-
-        "Dev":
-            "ckrpro",
-
-        "TikTok":
-            "ckr unknown",
-
-        "YouTube":
-            "ckr unknown"
+        "status": "running",
+        "name": "CKRPRO FF",
+        "version": "OB55",
+        "endpoint": "/info?uid=UID",
+        "example": "/info?uid=2084018498",
+        "priority": "BD → IND → BR",
+        "Dev": "ckrpro",
+        "TikTok": "ckr unknown",
+        "YouTube": "ckr unknown"
     })
 
 
@@ -1165,21 +853,13 @@ def token_status():
         )
 
         status[region] = {
-
-            "has_token":
-                True,
-
-            "expires_in":
-                f"{expires_in / 3600:.1f} hours"
+            "has_token": True,
+            "expires_in": f"{expires_in / 3600:.1f} hours"
         }
 
     return jsonify({
-
-        "total_tokens":
-            len(_token_cache),
-
-        "tokens":
-            status
+        "total_tokens": len(_token_cache),
+        "tokens": status
     })
 
 
@@ -1189,25 +869,11 @@ def token_status():
 
 if __name__ == "__main__":
 
-    print(
-        "=========================================="
-    )
-
-    print(
-        "🚀 CKRPRO FF API"
-    )
-
-    print(
-        "📡 /info?uid=UID"
-    )
-
-    print(
-        "🌍 BD → IND → BR"
-    )
-
-    print(
-        "=========================================="
-    )
+    print("==========================================")
+    print("🚀 CKRPRO FF API")
+    print("📡 /info?uid=UID")
+    print("🌍 BD → IND → BR")
+    print("==========================================")
 
     app.run(
         host="0.0.0.0",
